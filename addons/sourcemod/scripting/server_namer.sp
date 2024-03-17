@@ -7,7 +7,7 @@
 public Plugin myinfo =
 {
 	name = "ServerNamer",
-	author = "TouchMe",
+	author = "sheo, TouchMe",
 	description = "Changes server hostname according to the current game mode",
 	version = "build0000",
 	url = "https://github.com/TouchMe-Inc/l4d2_server_namer"
