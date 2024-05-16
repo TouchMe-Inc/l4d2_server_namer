@@ -8,7 +8,7 @@ public Plugin myinfo = {
 	name = "ServerNamer",
 	author = "sheo, TouchMe",
 	description = "Changes server hostname according to the current game mode",
-	version = "build_0000",
+	version = "build_0001",
 	url = "https://github.com/TouchMe-Inc/l4d2_server_namer"
 }
 
@@ -22,7 +22,7 @@ ConVar
 	g_cvHostNameTemplateFree = null
 ;
 
-Handle g_hGamemodeList = INVALID_HANDLE;
+Handle  g_hGamemodes = INVALID_HANDLE;
 
 
 /**
@@ -69,7 +69,35 @@ public void OnPluginStart()
 	HookConVarChange(g_cvHostNameTemplate, OnCvarChanged);
 	HookConVarChange(g_cvHostNameTemplateFree, OnCvarChanged);
 
-	FillGamemode(g_hGamemodeList = CreateTrie());
+	/*
+	 * Read config.
+	 */
+	char sPath[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, sPath, sizeof(sPath), "configs/server_namer.txt");
+	
+	if (!FileExists(sPath)) {
+		SetFailState("Couldn't load %s", sPath);
+	}
+
+	Handle hGamemodes = CreateKeyValues("Gamemodes");
+
+ 	if (!FileToKeyValues(hGamemodes, sPath)) {
+		SetFailState("Failed to parse keyvalues for %s", sPath);
+	}
+
+	g_hGamemodes = CreateTrie();
+
+	if (KvGotoFirstSubKey(hGamemodes, false))
+	{
+		char sSectionKey[32], sSectionValue[64];
+
+		do
+		{
+			KvGetSectionName(hGamemodes, sSectionKey, sizeof(sSectionKey));
+			KvGetString(hGamemodes, NULL_STRING, sSectionValue, sizeof(sSectionValue));
+			SetTrieString(g_hGamemodes, sSectionKey, sSectionValue);
+		} while (KvGotoNextKey(hGamemodes, false));
+	}
 }
 
 /**
@@ -112,54 +140,15 @@ void UpdateServerName()
 	if (sCustomGamemode[0] == '\0')
 	{
 		char sGamemode[32]; GetConVarString(g_cvGamemode, sGamemode, sizeof(sGamemode));
-		GetTrieString(g_hGamemodeList, sGamemode, sCustomGamemode, sizeof(sCustomGamemode));
+		if (!GetTrieString(g_hGamemodes, sGamemode, sCustomGamemode, sizeof(sCustomGamemode))) {
+			strcopy(sCustomGamemode, sizeof(sCustomGamemode), sGamemode);
+		}
 	}
 
 	ReplaceString(sTemplate, sizeof(sTemplate), "{hostname}", sCustomHostname);
 	ReplaceString(sTemplate, sizeof(sTemplate), "{gamemode}", sCustomGamemode);
 
 	SetConVarString(g_cvHostname, sTemplate);
-}
-
-/**
- * TODO: Read file
- */
-void FillGamemode(Handle hGamemodeList)
-{
-	SetTrieString(hGamemodeList, "versus", "Versus");
-	SetTrieString(hGamemodeList, "coop", "Campaign");
-	SetTrieString(hGamemodeList, "survival", "Survival");
-	SetTrieString(hGamemodeList, "scavenge", "Scavenge");
-	SetTrieString(hGamemodeList, "mutation12", "Realism Versus");
-	SetTrieString(hGamemodeList, "realism", "Realism");
-	SetTrieString(hGamemodeList, "mutation13", "Follow the Liter");
-	SetTrieString(hGamemodeList, "community4", "Nightmare");
-	SetTrieString(hGamemodeList, "community1", "Special Delivery");
-	SetTrieString(hGamemodeList, "community2", "Flu Season");
-	SetTrieString(hGamemodeList, "community5", "Death`s Door");
-	SetTrieString(hGamemodeList, "gunbrain", "GunBrain");
-	SetTrieString(hGamemodeList, "l4d1coop", "L4D1 Campaign");
-	SetTrieString(hGamemodeList, "mutation10", "Room For One");
-	SetTrieString(hGamemodeList, "mutation14", "Gib Fest");
-	SetTrieString(hGamemodeList, "mutation16", "Hunting Party");
-	SetTrieString(hGamemodeList, "mutation2", "Headshot!");
-	SetTrieString(hGamemodeList, "mutation20", "Healing Gnome");
-	SetTrieString(hGamemodeList, "mutation3", "Bleed Out");
-	SetTrieString(hGamemodeList, "mutation4", "Hard Eight");
-	SetTrieString(hGamemodeList, "mutation5", "Four Swordsmen");
-	SetTrieString(hGamemodeList, "mutation7", "Chainsaw Massacre");
-	SetTrieString(hGamemodeList, "mutation8", "Iron Man");
-	SetTrieString(hGamemodeList, "mutation9", "Last Gnome On Earth");
-	SetTrieString(hGamemodeList, "holdout", "Holdout");
-	SetTrieString(hGamemodeList, "dash", "Dash");
-	SetTrieString(hGamemodeList, "shootzones", "ShootZones");
-	SetTrieString(hGamemodeList, "mutation15", "Versus Survival");
-	SetTrieString(hGamemodeList, "community3", "Riding My Survivor");
-	SetTrieString(hGamemodeList, "community6", "Confogl mutation");
-	SetTrieString(hGamemodeList, "l4d1vs", "L4D1 Versus");
-	SetTrieString(hGamemodeList, "mutation11", "Healthpackalypse");
-	SetTrieString(hGamemodeList, "mutation18", "Bleed Out Versus");
-	SetTrieString(hGamemodeList, "mutation19", "Taaannnk!!");
 }
 
 bool IsEmptyServer()
