@@ -4,12 +4,11 @@
 #include <sourcemod>
 
 
-public Plugin myinfo =
-{
+public Plugin myinfo = {
 	name = "ServerNamer",
 	author = "sheo, TouchMe",
 	description = "Changes server hostname according to the current game mode",
-	version = "build0000",
+	version = "build_0000",
 	url = "https://github.com/TouchMe-Inc/l4d2_server_namer"
 }
 
@@ -37,9 +36,7 @@ Handle g_hGamemodeList = INVALID_HANDLE;
  */
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-	EngineVersion engine = GetEngineVersion();
-
-	if (engine != Engine_Left4Dead2)
+	if (GetEngineVersion() != Engine_Left4Dead2)
 	{
 		strcopy(error, err_max, "Plugin only supports Left 4 Dead 2.");
 		return APLRes_SilentFailure;
@@ -48,18 +45,24 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	return APLRes_Success;
 }
 
+/**
+ * Called when the plugin is fully initialized and all known external references are resolved.
+ */
 public void OnPluginStart()
 {
+	/*
+	 * Cvars.
+	 */
 	g_cvHostname = FindConVar("hostname");
 	g_cvGamemode = FindConVar("mp_gamemode");
-
-	// Reg cvars
-	g_cvCustomHostname = CreateConVar("sn_custom_hostname", "", "Main server name.");
-	g_cvCustomGamemode = CreateConVar("sn_custom_gamemode", "", "Main server name.");
+	g_cvCustomHostname = CreateConVar("sn_custom_hostname", "", "Custom server name.");
+	g_cvCustomGamemode = CreateConVar("sn_custom_gamemode", "", "Custom gamemode name.");
 	g_cvHostNameTemplate = CreateConVar("sn_hostname_template", "{hostname} | {gamemode}");
-	g_cvHostNameTemplateFree = CreateConVar("sn_hostname_template_free", "{hostname} *FREE*");
+	g_cvHostNameTemplateFree = CreateConVar("sn_hostname_template_free", "*FREE* {hostname}");
 
-	// Hooks
+	/*
+	 * Hook Cvar change.
+	 */
 	HookConVarChange(g_cvGamemode, OnCvarChanged);
 	HookConVarChange(g_cvCustomHostname, OnCvarChanged);
 	HookConVarChange(g_cvCustomGamemode, OnCvarChanged);
@@ -67,30 +70,32 @@ public void OnPluginStart()
 	HookConVarChange(g_cvHostNameTemplateFree, OnCvarChanged);
 
 	FillGamemode(g_hGamemodeList = CreateTrie());
-
-	UpdateServerName();
 }
 
-public void OnPluginEnd() {
-	CloseHandle(g_hGamemodeList);
-}
-
+/**
+ * If dependent cvars have been updated, update the server name.
+ */
 public void OnCvarChanged(ConVar cvar, const char[] sOldValue, const char[] sNewValue) {
 	UpdateServerName();
 }
 
-public void OnClientConnected(int client) {
+/**
+ * Update the server name if the player has joined the server.
+ */
+public void OnClientConnected(int iClient) {
 	UpdateServerName();
 }
 
-public void OnClientDisconnect_Post(int client) {
+/**
+ * Update the server name if the player has left the server.
+ */
+public void OnClientDisconnect_Post(int iClient) {
 	UpdateServerName();
 }
 
-public void OnConfigsExecuted() {
-	UpdateServerName();
-}
-
+/**
+ * We define a server name template, and then set a new server name.
+ */
 void UpdateServerName()
 {
 	char sCustomHostname[64]; GetConVarString(g_cvCustomHostname, sCustomHostname, sizeof(sCustomHostname));
@@ -116,18 +121,9 @@ void UpdateServerName()
 	SetConVarString(g_cvHostname, sTemplate);
 }
 
-bool IsEmptyServer()
-{
-	for(int iClient = 1; iClient <= MaxClients; iClient ++)
-	{
-		if (IsClientConnected(iClient) && !IsFakeClient(iClient)) {
-			return false;
-		}
-	}
-
-	return true;
-}
-
+/**
+ * TODO: Read file
+ */
 void FillGamemode(Handle hGamemodeList)
 {
 	SetTrieString(hGamemodeList, "versus", "Versus");
@@ -164,4 +160,16 @@ void FillGamemode(Handle hGamemodeList)
 	SetTrieString(hGamemodeList, "mutation11", "Healthpackalypse");
 	SetTrieString(hGamemodeList, "mutation18", "Bleed Out Versus");
 	SetTrieString(hGamemodeList, "mutation19", "Taaannnk!!");
+}
+
+bool IsEmptyServer()
+{
+	for(int iClient = 1; iClient <= MaxClients; iClient ++)
+	{
+		if (IsClientConnected(iClient) && !IsFakeClient(iClient)) {
+			return false;
+		}
+	}
+
+	return true;
 }
