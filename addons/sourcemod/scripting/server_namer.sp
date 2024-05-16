@@ -51,30 +51,11 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 public void OnPluginStart()
 {
 	/*
-	 * Cvars.
-	 */
-	g_cvHostname = FindConVar("hostname");
-	g_cvGamemode = FindConVar("mp_gamemode");
-	g_cvCustomHostname = CreateConVar("sn_custom_hostname", "", "Custom server name.");
-	g_cvCustomGamemode = CreateConVar("sn_custom_gamemode", "", "Custom gamemode name.");
-	g_cvHostNameTemplate = CreateConVar("sn_hostname_template", "{hostname} | {gamemode}");
-	g_cvHostNameTemplateFree = CreateConVar("sn_hostname_template_free", "*FREE* {hostname}");
-
-	/*
-	 * Hook Cvar change.
-	 */
-	HookConVarChange(g_cvGamemode, OnCvarChanged);
-	HookConVarChange(g_cvCustomHostname, OnCvarChanged);
-	HookConVarChange(g_cvCustomGamemode, OnCvarChanged);
-	HookConVarChange(g_cvHostNameTemplate, OnCvarChanged);
-	HookConVarChange(g_cvHostNameTemplateFree, OnCvarChanged);
-
-	/*
 	 * Read config.
 	 */
 	char sPath[PLATFORM_MAX_PATH];
 	BuildPath(Path_SM, sPath, sizeof(sPath), "configs/server_namer.txt");
-	
+
 	if (!FileExists(sPath)) {
 		SetFailState("Couldn't load %s", sPath);
 	}
@@ -98,6 +79,25 @@ public void OnPluginStart()
 			SetTrieString(g_hGamemodes, sSectionKey, sSectionValue);
 		} while (KvGotoNextKey(hGamemodes, false));
 	}
+
+	/*
+	 * Cvars.
+	 */
+	g_cvHostname = FindConVar("hostname");
+	g_cvGamemode = FindConVar("mp_gamemode");
+	g_cvCustomHostname = CreateConVar("sn_custom_hostname", "", "Custom server name.");
+	g_cvCustomGamemode = CreateConVar("sn_custom_gamemode", "", "Custom gamemode name.");
+	g_cvHostNameTemplate = CreateConVar("sn_hostname_template", "{hostname} | {gamemode}");
+	g_cvHostNameTemplateFree = CreateConVar("sn_hostname_template_free", "*FREE* {hostname}");
+
+	/*
+	 * Hook Cvar change.
+	 */
+	HookConVarChange(g_cvGamemode, OnCvarChanged);
+	HookConVarChange(g_cvCustomHostname, OnCvarChanged);
+	HookConVarChange(g_cvCustomGamemode, OnCvarChanged);
+	HookConVarChange(g_cvHostNameTemplate, OnCvarChanged);
+	HookConVarChange(g_cvHostNameTemplateFree, OnCvarChanged);
 }
 
 /**
