@@ -5,120 +5,108 @@
 
 
 public Plugin myinfo = {
-	name = "ServerNamer",
-	author = "sheo, TouchMe",
-	description = "Changes server hostname according to the current game mode",
-	version = "build_0001",
-	url = "https://github.com/TouchMe-Inc/l4d2_server_namer"
+    name        = "ServerNamer",
+    author      = "sheo, TouchMe",
+    description = "Changes server hostname according to the current game mode",
+    version     = "build_0002",
+    url         = "https://github.com/TouchMe-Inc/l4d2_server_namer"
 }
 
 
 ConVar
-	g_cvHostname = null,
-	g_cvGamemode = null,
-	g_cvCustomHostname = null,
-	g_cvCustomGamemode = null,
-	g_cvHostNameTemplate = null,
-	g_cvHostNameTemplateFree = null
+    g_cvHostname = null,
+    g_cvGamemode = null,
+    g_cvHostNameTemplate = null,
+    g_cvHostNameTemplateFree = null,
+    g_cvServerNum = null,
+    g_cvCustomHostname = null,
+    g_cvCustomGamemode = null
 ;
 
-Handle  g_hGamemodes = INVALID_HANDLE;
+StringMap g_smGamemodes = null;
 
-
-/**
- * Called before OnPluginStart.
- *
- * @param myself            Handle to the plugin.
- * @param late              Whether or not the plugin was loaded "late" (after map load).
- * @param error             Error message buffer in case load failed.
- * @param err_max           Maximum number of characters for error message buffer.
- * @return                  APLRes_Success | APLRes_SilentFailure.
- */
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
-{
-	if (GetEngineVersion() != Engine_Left4Dead2)
-	{
-		strcopy(error, err_max, "Plugin only supports Left 4 Dead 2.");
-		return APLRes_SilentFailure;
-	}
-
-	return APLRes_Success;
-}
 
 /**
  * Called when the plugin is fully initialized and all known external references are resolved.
  */
 public void OnPluginStart()
 {
-	/*
-	 * Read config.
-	 */
-	char sPath[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, sPath, sizeof(sPath), "configs/server_namer.txt");
+    /*
+     * Read config.
+     */
+    char szPath[PLATFORM_MAX_PATH];
+    BuildPath(Path_SM, szPath, sizeof(szPath), "configs/server_namer.txt");
 
-	if (!FileExists(sPath)) {
-		SetFailState("Couldn't load %s", sPath);
-	}
+    ReadConfig(szPath, g_smGamemodes = new StringMap());
 
-	Handle hGamemodes = CreateKeyValues("Gamemodes");
+    /*
+     * Cvars.
+     */
+    g_cvHostname = FindConVar("hostname");
+    g_cvGamemode = FindConVar("mp_gamemode");
+    g_cvHostNameTemplate = CreateConVar("sn_hostname_template", "{hostname} | {gamemode}");
+    g_cvHostNameTemplateFree = CreateConVar("sn_hostname_template_free", "*FREE* {hostname}");
+    g_cvServerNum = CreateConVar("sn_custom_server_num", "1", "Custom server number. Use {num}");
+    g_cvCustomHostname = CreateConVar("sn_custom_hostname", "", "Custom server name. Use {hostname}");
+    g_cvCustomGamemode = CreateConVar("sn_custom_gamemode", "", "Custom gamemode name. Use {gamemode}");
 
- 	if (!FileToKeyValues(hGamemodes, sPath)) {
-		SetFailState("Failed to parse keyvalues for %s", sPath);
-	}
+    /*
+     * Hook Cvar change.
+     */
+    HookConVarChange(g_cvGamemode, OnCvarChanged);
+    HookConVarChange(g_cvCustomHostname, OnCvarChanged);
+    HookConVarChange(g_cvCustomGamemode, OnCvarChanged);
+    HookConVarChange(g_cvServerNum, OnCvarChanged);
+    HookConVarChange(g_cvHostNameTemplate, OnCvarChanged);
+    HookConVarChange(g_cvHostNameTemplateFree, OnCvarChanged);
+}
 
-	g_hGamemodes = CreateTrie();
+void ReadConfig(const char[] szPath, StringMap smGamemodes)
+{
+    if (!FileExists(szPath)) {
+        SetFailState("Couldn't load %s", szPath);
+    }
 
-	if (KvGotoFirstSubKey(hGamemodes, false))
-	{
-		char sSectionKey[32], sSectionValue[64];
+    Handle hGamemodes = CreateKeyValues("Gamemodes");
 
-		do
-		{
-			KvGetSectionName(hGamemodes, sSectionKey, sizeof(sSectionKey));
-			KvGetString(hGamemodes, NULL_STRING, sSectionValue, sizeof(sSectionValue));
-			SetTrieString(g_hGamemodes, sSectionKey, sSectionValue);
-		} while (KvGotoNextKey(hGamemodes, false));
-	}
+    if (!FileToKeyValues(hGamemodes, szPath)) {
+        SetFailState("Failed to parse keyvalues for %s", szPath);
+    }
 
-	/*
-	 * Cvars.
-	 */
-	g_cvHostname = FindConVar("hostname");
-	g_cvGamemode = FindConVar("mp_gamemode");
-	g_cvCustomHostname = CreateConVar("sn_custom_hostname", "", "Custom server name.");
-	g_cvCustomGamemode = CreateConVar("sn_custom_gamemode", "", "Custom gamemode name.");
-	g_cvHostNameTemplate = CreateConVar("sn_hostname_template", "{hostname} | {gamemode}");
-	g_cvHostNameTemplateFree = CreateConVar("sn_hostname_template_free", "*FREE* {hostname}");
+    if (KvGotoFirstSubKey(hGamemodes, false))
+    {
+        char szSectionKey[32], szSectionValue[64];
 
-	/*
-	 * Hook Cvar change.
-	 */
-	HookConVarChange(g_cvGamemode, OnCvarChanged);
-	HookConVarChange(g_cvCustomHostname, OnCvarChanged);
-	HookConVarChange(g_cvCustomGamemode, OnCvarChanged);
-	HookConVarChange(g_cvHostNameTemplate, OnCvarChanged);
-	HookConVarChange(g_cvHostNameTemplateFree, OnCvarChanged);
+        do
+        {
+            KvGetSectionName(hGamemodes, szSectionKey, sizeof(szSectionKey));
+            KvGetString(hGamemodes, NULL_STRING, szSectionValue, sizeof(szSectionValue));
+            smGamemodes.SetString(szSectionKey, szSectionValue);
+        } while (KvGotoNextKey(hGamemodes, false));
+    }
+
+    delete hGamemodes;
 }
 
 /**
  * If dependent cvars have been updated, update the server name.
  */
 public void OnCvarChanged(ConVar cvar, const char[] sOldValue, const char[] sNewValue) {
-	UpdateServerName();
+    UpdateServerName();
 }
 
 /**
  * Update the server name if the player has joined the server.
  */
 public void OnClientConnected(int iClient) {
-	UpdateServerName();
+    UpdateServerName();
 }
 
 /**
  * Update the server name if the player has left the server.
  */
 public void OnClientDisconnect_Post(int iClient) {
-	UpdateServerName();
+    UpdateServerName();
 }
 
 /**
@@ -126,39 +114,44 @@ public void OnClientDisconnect_Post(int iClient) {
  */
 void UpdateServerName()
 {
-	char sCustomHostname[64]; GetConVarString(g_cvCustomHostname, sCustomHostname, sizeof(sCustomHostname));
+    char szCustomHostname[64]; GetConVarString(g_cvCustomHostname, szCustomHostname, sizeof(szCustomHostname));
 
-	if (sCustomHostname[0] == '\0') {
-		return;
-	}
+    if (szCustomHostname[0] == '\0') {
+        return;
+    }
 
-	ConVar cvTemplate = IsEmptyServer() ? g_cvHostNameTemplateFree : g_cvHostNameTemplate;
+    ConVar cvTemplate = IsEmptyServer() ? g_cvHostNameTemplateFree : g_cvHostNameTemplate;
 
-	char sTemplate[128]; GetConVarString(cvTemplate, sTemplate, sizeof(sTemplate));
-	char sCustomGamemode[32]; GetConVarString(g_cvCustomGamemode, sCustomGamemode, sizeof(sCustomGamemode));
+    char szTemplate[128]; GetConVarString(cvTemplate, szTemplate, sizeof(szTemplate));
+    char szCustomGamemode[32]; GetConVarString(g_cvCustomGamemode, szCustomGamemode, sizeof(szCustomGamemode));
 
-	if (sCustomGamemode[0] == '\0')
-	{
-		char sGamemode[32]; GetConVarString(g_cvGamemode, sGamemode, sizeof(sGamemode));
-		if (!GetTrieString(g_hGamemodes, sGamemode, sCustomGamemode, sizeof(sCustomGamemode))) {
-			strcopy(sCustomGamemode, sizeof(sCustomGamemode), sGamemode);
-		}
-	}
+    if (szCustomGamemode[0] == '\0')
+    {
+        char szGamemode[32];
+        GetConVarString(g_cvGamemode, szGamemode, sizeof(szGamemode));
 
-	ReplaceString(sTemplate, sizeof(sTemplate), "{hostname}", sCustomHostname);
-	ReplaceString(sTemplate, sizeof(sTemplate), "{gamemode}", sCustomGamemode);
+        if (!GetTrieString(g_smGamemodes, szGamemode, szCustomGamemode, sizeof(szCustomGamemode))) {
+            strcopy(szCustomGamemode, sizeof(szCustomGamemode), szGamemode);
+        }
+    }
 
-	SetConVarString(g_cvHostname, sTemplate);
+    char szServerNum[4]; GetConVarString(g_cvServerNum, szServerNum, sizeof(szServerNum));
+
+    ReplaceString(szTemplate, sizeof(szTemplate), "{hostname}", szCustomHostname);
+    ReplaceString(szTemplate, sizeof(szTemplate), "{gamemode}", szCustomGamemode);
+    ReplaceString(szTemplate, sizeof(szTemplate), "{num}", szServerNum);
+
+    SetConVarString(g_cvHostname, szTemplate);
 }
 
 bool IsEmptyServer()
 {
-	for(int iClient = 1; iClient <= MaxClients; iClient ++)
-	{
-		if (IsClientConnected(iClient) && !IsFakeClient(iClient)) {
-			return false;
-		}
-	}
+    for(int iClient = 1; iClient <= MaxClients; iClient ++)
+    {
+        if (IsClientConnected(iClient) && !IsFakeClient(iClient)) {
+            return false;
+        }
+    }
 
-	return true;
+    return true;
 }
